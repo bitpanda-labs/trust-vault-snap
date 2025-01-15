@@ -1,6 +1,6 @@
 {
   "name": "root",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "private": true,
   "description": "",
   "homepage": "https://github.com/MetaMask/template-snap-monorepo#readme",
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://buildpanda.wtf/bitpandacustody/general/metamask-snap.git"
+    "url": "git+git@github.com:bitpanda-labs/trust-vault-snap.git"
   },
   "license": "(MIT-0 OR Apache-2.0)",
   "author": "",
