@@ -1,0 +1,48 @@
+{
+  "version": "0.1.3",
+  "description": "An account management snap that interacts with Bitpanda Custody subwallets to sign transactions",
+  "proposedName": "TrustVault",
+  "repository": {
+    "type": "git",
+    "url": "https://buildpanda.wtf/bitpandacustody/general/metamask-snap.git"
+  },
+  "source": {
+    "shasum": "6lKo4PRJv9a74MFftLxvNpsJN0QnoRKWWiIL8Amd0N8=",
+    "location": {
+      "npm": {
+        "filePath": "dist/bundle.js",
+        "iconPath": "resources/trustvault.svg",
+        "packageName": "@bitpandacustody/trust-vault-snap",
+        "registry": "https://registry.npmjs.org/"
+      }
+    }
+  },
+  "initialPermissions": {
+    "endowment:keyring": {
+      "allowedOrigins": [
+        "http://localhost:8083"
+      ]
+    },
+    "snap_dialog": {},
+    "endowment:network-access": {},
+    "snap_manageAccounts": {},
+    "snap_manageState": {},
+    "snap_getEntropy": {},
+    "endowment:rpc": {
+      "allowedOrigins": [
+        "http://localhost:8083"
+      ]
+    },
+    "endowment:cronjob": {
+      "jobs": [
+        {
+          "expression": "* * * * *",
+          "request": {
+            "method": "checkPendingRequests"
+          }
+        }
+      ]
+    }
+  },
+  "manifestVersion": "0.1"
+}
