@@ -1,0 +1,15 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "always",
+    "source.addMissingImports": "always",
+    "source.removeUnusedImports": "always",
+    "source.fixAll.eslint": "always"
+  },
+  "json.schemas": [
+    {
+      "fileMatch": ["snap.manifest.json"],
+      "url": "https://raw.githubusercontent.com/MetaMask/SIPs/main/assets/sip-9/snap.manifest.schema.json"
+    }
+  ]
+}
