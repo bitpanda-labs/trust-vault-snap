@@ -25,6 +25,7 @@ const config: SnapConfig = {
   },
   environment: {
     allowedOrigins: ['http://localhost:8083'],
+    version: process.env.npm_package_version,
   },
 };
 

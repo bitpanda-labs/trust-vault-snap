@@ -11,6 +11,7 @@ module.exports = {
       extends: ['@metamask/eslint-config-nodejs'],
       rules: {
         '@typescript-eslint/naming-convention': 'off',
+        'n/no-process-env': 'off',
       },
     },
     {

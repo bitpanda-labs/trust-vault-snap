@@ -28,6 +28,7 @@ const config: SnapConfig = {
       'https://tvw-sandbox.bitpandacustody-test.com',
       'https://tvw-sandbox.trustology-test.com',
     ],
+    version: process.env.npm_package_version,
   },
 };
 

@@ -35,6 +35,17 @@ export async function requestApproved(
 }
 
 /**
+ * Emits an RequestRejected keyring event.
+ *
+ * @param data - The payload of the event.
+ */
+export async function requestRejected(
+  data: Record<string, Json>,
+): Promise<void> {
+  await emitEvent(KeyringEvent.RequestRejected, data);
+}
+
+/**
  * Emits a keyring event of the provided type.
  *
  * @param event - The event type.

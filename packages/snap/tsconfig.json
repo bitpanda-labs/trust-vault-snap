@@ -6,5 +6,5 @@
     "jsxImportSource": "@metamask/snaps-sdk",
     "resolveJsonModule": true
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx"]
 }

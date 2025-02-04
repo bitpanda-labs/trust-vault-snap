@@ -18,6 +18,10 @@ export function createEip1559TransactionMutation(
   rpcUrl?: string,
 ): string {
   const rpcUrlField = rpcUrl ? `rpcUrl: "${rpcUrl}",` : '';
+  const dataField =
+    transaction && transaction.data !== '0x'
+      ? `data: "${transaction.data}"`
+      : '';
   return `mutation {
     createEIP1559Transaction(
       createEIP1559TransactionInput: {
@@ -30,7 +34,8 @@ export function createEip1559TransactionMutation(
           gasLimit: "${transaction.gasLimit}",
           from: "${transaction.from}",
           ${transaction.to ? `to: "${transaction.to}",` : ''}
-          ${transaction.value ? `value: "${transaction.value}"` : ''}
+          ${transaction.value ? `value: "${transaction.value}",` : ''}
+          ${dataField}
         }
         source: "Metamask",
         sendToNetworkWhenSigned: ${submit},
@@ -62,6 +67,10 @@ export function createEthereumTransactionMutation(
   rpcUrl?: string,
 ): string {
   const rpcUrlField = rpcUrl ? `rpcUrl: "${rpcUrl}",` : '';
+  const dataField =
+    transaction && transaction.data !== '0x'
+      ? `data: "${transaction.data}"`
+      : '';
   return `mutation {
     createEthereumTransaction(
       createTransactionInput: {
@@ -74,7 +83,7 @@ export function createEthereumTransactionMutation(
           value: "${parseInt(transaction.value, 16)}",
           fromAddress: "${transaction.from}",
           to: "${transaction.to}",
-          ${transaction.data ? `data: "${transaction.data}",` : ''}
+          ${dataField}
         }
         source: "Metamask",
         sendToNetworkWhenSigned: ${submit},

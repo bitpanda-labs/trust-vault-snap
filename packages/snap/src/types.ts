@@ -1,11 +1,21 @@
 import type { KeyringAccount, KeyringRequest } from '@metamask/keyring-api';
 import type { Buffer } from 'buffer';
 
+export type RequestConfiguration = {
+  trustApiConfiguration: TrustApiConfiguration;
+  clientInfo: string;
+};
+
 export type TrustApiConfiguration = {
   url: string;
   apiKey: string;
   trustId: string;
   token: TrustApiToken;
+};
+
+export type AddRpcUrlInput = {
+  chainId: string;
+  rpcUrl: string;
 };
 
 export type TrustApiToken = {
@@ -22,12 +32,15 @@ export type TrustVaultRequest = KeyringRequest & {
 export enum RequestStatus {
   Pending = 'pending',
   Signed = 'signed',
+  Rejected = 'rejected',
 }
 
 export type KeyringState = {
   trustApiConfiguration?: TrustApiConfiguration;
   accounts: Record<string, KeyringAccount>;
   requests: Record<string, TrustVaultRequest>;
+  rpcUrls: Record<string, string>;
+  mode: SnapMode;
 };
 
 export type EvmTransaction = {
@@ -53,6 +66,14 @@ export enum TrustVaultRequestStatus {
   Queued = 'QUEUED',
   Signed = 'SIGNED',
   Submitted = 'SUBMITTED',
+  Cancelled = 'USER_CANCELLED',
+  Blocked = 'BLOCKED',
+  Errored = 'ERROR',
+}
+
+export enum SnapMode {
+  Basic = 'basic',
+  Enhanced = 'enhanced',
 }
 
 export type SignedTransaction = {
@@ -79,4 +100,14 @@ export type GetRequestResponse = {
 export type EciesKeyPair = {
   privateKey: Buffer;
   publicKey: string;
+};
+
+export type EthFeeHistoryResponse = {
+  oldestblock: string;
+  baseFeePerGas: string[];
+  baseFeePerBlobGas: string[];
+  gasUsedRatio: number[];
+  blobGasUsedRatio: number[];
+  reward: [string[]];
+  proxy?: boolean;
 };

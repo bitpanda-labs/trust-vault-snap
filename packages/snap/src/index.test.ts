@@ -1,6 +1,8 @@
 import { expect } from '@jest/globals';
 import { installSnap } from '@metamask/snaps-jest';
 
+import { SnapMode } from './types';
+
 describe('onRpcRequest', () => {
   describe('hello', () => {
     it('returns hello with correct origin', async () => {
@@ -13,6 +15,74 @@ describe('onRpcRequest', () => {
       });
       expect(response.response).toMatchObject({ result: `hello ${origin}` });
     });
+  });
+
+  it('gets the snap mode', async () => {
+    const { request } = await installSnap();
+
+    const origin = 'Jest';
+    const response = await request({
+      method: 'getSnapMode',
+      origin,
+    });
+    expect(response.response).toMatchObject({ result: SnapMode.Basic });
+  });
+
+  it('updates the snap mode', async () => {
+    const { request } = await installSnap();
+    const origin = 'Jest';
+
+    const getErrorMessage = (response: any): string => {
+      return response.response.error.message;
+    };
+
+    let response = await request({
+      method: 'updateSnapMode',
+      params: [{ mode: SnapMode.Enhanced }],
+      origin,
+    });
+    expect(getErrorMessage(response)).toBe(
+      'Update snap mode input must be an object',
+    );
+    response = await request({
+      method: 'updateSnapMode',
+      params: { unknown: SnapMode.Enhanced },
+      origin,
+    });
+    expect(getErrorMessage(response)).toBe(
+      'Update snap mode input must contain a mode field',
+    );
+    response = await request({
+      method: 'updateSnapMode',
+      params: { mode: 'unknown' },
+      origin,
+    });
+    expect(getErrorMessage(response)).toBe(
+      'Snap mode can only be "basic" or "enhanced"',
+    );
+
+    await request({
+      method: 'updateSnapMode',
+      params: { mode: SnapMode.Enhanced },
+      origin,
+    });
+    response = await request({
+      method: 'getSnapMode',
+      origin,
+    });
+    expect(response.response).toMatchObject({ result: SnapMode.Enhanced });
+  });
+
+  it('sets an rpc url', async () => {
+    const { request } = await installSnap();
+
+    const origin = 'Jest';
+    const response = await request({
+      method: 'addRpcUrl',
+      params: { chainId: 'chain', rpcUrl: 'http://rpc' },
+      origin,
+    });
+    expect(response.response).toMatchObject({ result: {} });
   });
 
   it('throws an error if the requested method does not exist', async () => {

@@ -25,6 +25,7 @@ const config: SnapConfig = {
   },
   environment: {
     allowedOrigins: ['https://app.bitpandacustody.com'],
+    version: process.env.npm_package_version,
   },
 };
 

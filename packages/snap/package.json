@@ -1,6 +1,6 @@
 {
   "name": "@bitpandacustody/trust-vault-snap",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "description": "An account management snap that interacts with Bitpanda Custody subwallets to sign transactions.",
   "repository": {
     "type": "git",
@@ -16,11 +16,11 @@
   "scripts": {
     "allow-scripts": "yarn workspace root allow-scripts",
     "build": "yarn build:local",
+    "build:clean": "yarn clean && yarn build",
     "build:local": "./scripts/build.sh local",
     "build:master": "./scripts/build.sh master",
     "build:production": "./scripts/build.sh production",
     "build:sandbox": "./scripts/build.sh sandbox",
-    "build:clean": "yarn clean && yarn build",
     "clean": "rimraf dist",
     "lint": "yarn lint:eslint && yarn lint:misc --check",
     "lint:eslint": "eslint . --cache --ext js,ts",
@@ -33,7 +33,7 @@
   "dependencies": {
     "@metamask/eth-sig-util": "^8.1.1",
     "@metamask/keyring-api": "^9.0.0",
-    "@metamask/snaps-sdk": "^6.1.1",
+    "@metamask/snaps-sdk": "^6.15.0",
     "@metamask/utils": "^11.0.1",
     "buffer": "^6.0.3",
     "ecies-geth": "^1.7.3",

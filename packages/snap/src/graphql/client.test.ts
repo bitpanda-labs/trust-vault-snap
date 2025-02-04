@@ -13,7 +13,7 @@ import {
   graphQLRequest,
 } from './client';
 
-const config = {
+const apiConfig = {
   url: 'url',
   apiKey: 'apiKey',
   trustId: 'trustId',
@@ -22,6 +22,10 @@ const config = {
     iv: 'iv',
     tag: 'tag',
   },
+};
+const config = {
+  trustApiConfiguration: apiConfig,
+  clientInfo: 'mm:0.0.0/snap:0.0.1/mode:basic',
 };
 
 const transaction = {
@@ -126,7 +130,9 @@ describe('GraphQL client', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
       expect(updateConfig).toHaveBeenCalled();
       expect(createQuery).toHaveBeenCalledTimes(2);
-      expect(createQuery.mock.calls[0]?.[0]).toMatchObject(config.token);
+      expect(createQuery.mock.calls[0]?.[0]).toMatchObject(
+        config.trustApiConfiguration.token,
+      );
       expect(createQuery.mock.calls[1]?.[0]).toMatchObject(
         tokenData.data.refreshAuthenticationTokens,
       );
@@ -134,7 +140,7 @@ describe('GraphQL client', () => {
         mockFetch.mock.calls[0]?.[1]?.body?.toString() as string;
       const bodyThirdRequest =
         mockFetch.mock.calls[2]?.[1]?.body?.toString() as string;
-      expect(bodyFirstRequest).toContain(config.token.iv);
+      expect(bodyFirstRequest).toContain(config.trustApiConfiguration.token.iv);
       expect(bodyThirdRequest).toContain(refreshedIv);
     });
   });

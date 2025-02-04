@@ -10,10 +10,21 @@ import type {
   TrustApiConfiguration,
   TrustVaultRequest,
 } from './types';
-import { RequestStatus, TrustVaultRequestStatus } from './types';
+import { RequestStatus, SnapMode, TrustVaultRequestStatus } from './types';
 
 jest.mock('./events');
-jest.mock('./snapApi');
+const mockIsUsingRpcProxy = jest.fn();
+const mockDisplayProxyDialog = jest.fn();
+jest.mock('./snapApi', () => {
+  return {
+    getState: jest.fn(),
+    saveState: jest.fn(),
+    generateEntropy: jest.fn(),
+    getMetamaskVersion: jest.fn(async () => '10.0.0'),
+    isUsingRpcProxy: () => mockIsUsingRpcProxy(),
+    displayProxyDialog: () => mockDisplayProxyDialog(),
+  };
+});
 jest.mock('./cryptography', () => {
   return {
     generateEciesKeyPair: jest.fn(async () => {
@@ -192,10 +203,16 @@ describe('TrustVaultKeyring', () => {
   describe('submitRequest', () => {
     beforeEach(() => {
       mockCreateEip1559Transaction.mockClear();
+      mockCreateLegacyTransaction.mockClear();
     });
 
     it('throws an error if trust api configuration is not loaded', async () => {
-      const state: KeyringState = { accounts: {}, requests: {} };
+      const state: KeyringState = {
+        accounts: {},
+        requests: {},
+        rpcUrls: {},
+        mode: SnapMode.Basic,
+      };
       const keyring = new TrustVaultKeyring(state);
       const request = createRequest(EthMethod.SignTransaction);
       await expect(
@@ -244,6 +261,51 @@ describe('TrustVaultKeyring', () => {
       expect(createdRequest?.trustVaultRequestId).toBe('requestId');
     });
 
+    it('throws an error if enhanced mode is used without proxy', async () => {
+      mockIsUsingRpcProxy.mockImplementation(async () => false);
+      const state = createState({}, {}, SnapMode.Enhanced);
+      const keyring = new TrustVaultKeyring(state);
+      const params = [{ type: '0x0', gasLimit: '0x01', gasPrice: '0x02' }];
+      const request = createRequest(EthMethod.SignTransaction, params);
+      await expect(
+        async () => await keyring.submitRequest(request),
+      ).rejects.toThrow(
+        'Snap is in enhanced mode but TrustVault proxy is not configured',
+      );
+      expect(mockDisplayProxyDialog).toHaveBeenCalled();
+    });
+
+    it('throws an error if enhanced mode is and rpc url is not found', async () => {
+      mockIsUsingRpcProxy.mockImplementation(async () => true);
+      const state = createState({}, {}, SnapMode.Enhanced);
+      const keyring = new TrustVaultKeyring(state);
+      const params = [
+        { chainId: 'unknown', type: '0x0', gasLimit: '0x01', gasPrice: '0x02' },
+      ];
+      const request = createRequest(EthMethod.SignTransaction, params);
+      await expect(
+        async () => await keyring.submitRequest(request),
+      ).rejects.toThrow('ChainId unknown does not correspond to an rpc url');
+      expect(mockDisplayProxyDialog).toHaveBeenCalled();
+    });
+
+    it('uses the rpc url and submits tx if enhanced mode', async () => {
+      mockIsUsingRpcProxy.mockImplementation(async () => true);
+      const state = createState({}, {}, SnapMode.Enhanced);
+      const keyring = new TrustVaultKeyring(state);
+      await keyring.addRpcUrl({ chainId: 'chain', rpcUrl: 'http://rpc' });
+      const params = [
+        { chainId: 'chain', type: '0x0', gasLimit: '0x01', gasPrice: '0x02' },
+      ];
+      const request = createRequest(EthMethod.SignTransaction, params);
+      const response = await keyring.submitRequest(request);
+      expect(response).toMatchObject({ pending: true });
+      expect(mockCreateLegacyTransaction.mock?.calls?.[0]?.[2]).toBe(true);
+      expect(mockCreateLegacyTransaction.mock?.calls?.[0]?.[4]).toBe(
+        'http://rpc',
+      );
+    });
+
     it('creates a personal sign request', async () => {
       const state = createState({}, {});
       const keyring = new TrustVaultKeyring(state);
@@ -272,11 +334,17 @@ describe('TrustVaultKeyring', () => {
     beforeEach(() => {
       mockFetchTransactionInfo.mockClear();
       mockGetRequest.mockClear();
+      mockIsUsingRpcProxy.mockClear();
+      mockDisplayProxyDialog.mockClear();
     });
 
     const pendingTransactionInfoResponse = {
       signedTransaction: null,
       status: TrustVaultRequestStatus.Pending,
+    };
+    const cancelledTransactionInfoResponse = {
+      signedTransaction: null,
+      status: TrustVaultRequestStatus.Cancelled,
     };
     const signedTransactionInfoResponse = {
       signedTransaction: {
@@ -305,6 +373,18 @@ describe('TrustVaultKeyring', () => {
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(0);
+    });
+
+    it('will not check requests if enhanced mode is on by not using proxy', async () => {
+      mockIsUsingRpcProxy.mockImplementation(async () => false);
+      const requests: Record<string, TrustVaultRequest> = {};
+      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      requests[request.id] = request;
+      const state = createState({}, requests, SnapMode.Enhanced);
+      const keyring = new TrustVaultKeyring(state);
+      await keyring.checkPendingRequests();
+      expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(0);
+      expect(mockDisplayProxyDialog).toHaveBeenCalled();
     });
 
     it('will check multiple pending requests', async () => {
@@ -341,6 +421,22 @@ describe('TrustVaultKeyring', () => {
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(1);
       expect((await keyring.getRequest(request.id)).status).toBe(
         RequestStatus.Signed,
+      );
+    });
+
+    it('will reject a cancelled request', async () => {
+      mockFetchTransactionInfo.mockImplementation(
+        async () => cancelledTransactionInfoResponse,
+      );
+      const requests: Record<string, TrustVaultRequest> = {};
+      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      requests[request.id] = request;
+      const state = createState({}, requests);
+      const keyring = new TrustVaultKeyring(state);
+      await keyring.checkPendingRequests();
+      expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(1);
+      expect((await keyring.getRequest(request.id)).status).toBe(
+        RequestStatus.Rejected,
       );
     });
 
@@ -395,7 +491,12 @@ describe('TrustVaultKeyring', () => {
 
   describe('addTrustApiConfiguration', () => {
     it('saves the TrustApiConfiguration to the state', async () => {
-      const state: KeyringState = { accounts: {}, requests: {} };
+      const state: KeyringState = {
+        accounts: {},
+        requests: {},
+        rpcUrls: {},
+        mode: SnapMode.Basic,
+      };
       const keyring = new TrustVaultKeyring(state);
       const config = createState({}, {}).trustApiConfiguration;
       await keyring.addTrustApiConfiguration(config as TrustApiConfiguration);
@@ -470,11 +571,13 @@ function createRequest(method: EthMethod, params?: any): KeyringRequest {
  *
  * @param accounts - The mock accounts.
  * @param requests - The mock requests.
+ * @param mode - The mock snap mode.
  * @returns The mock KeyringState.
  */
 function createState(
   accounts: Record<string, KeyringAccount>,
   requests: Record<string, TrustVaultRequest>,
+  mode: SnapMode = SnapMode.Basic,
 ): KeyringState {
   return {
     accounts,
@@ -489,5 +592,7 @@ function createState(
         tag: 'tag',
       },
     },
+    rpcUrls: {},
+    mode,
   };
 }

@@ -10,7 +10,8 @@ import { type OnRpcRequestHandler } from '@metamask/snaps-sdk';
 
 import { TrustVaultKeyring } from './keyring';
 import { getState } from './snapApi';
-import type { TrustApiConfiguration } from './types';
+import type { TrustApiConfiguration, AddRpcUrlInput } from './types';
+import { getUpdatedMode } from './util';
 
 /**
  * Handle incoming JSON-RPC requests, sent through `wallet_invokeSnap`.
@@ -37,6 +38,15 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
       await keyring.addTrustApiConfiguration(
         request.params as TrustApiConfiguration,
       );
+      break;
+    case 'getSnapMode':
+      response = keyring.getSnapMode();
+      break;
+    case 'updateSnapMode':
+      await keyring.updateSnapMode(getUpdatedMode(request.params));
+      break;
+    case 'addRpcUrl':
+      await keyring.addRpcUrl(request.params as AddRpcUrlInput);
       break;
     default:
       throw new Error('Method not found.');
