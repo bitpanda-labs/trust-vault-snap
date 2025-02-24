@@ -1,6 +1,6 @@
 {
   "name": "@bitpandacustody/trust-vault-snap",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "An account management snap that interacts with Bitpanda Custody subwallets to sign transactions.",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
     "lint": "yarn lint:eslint && yarn lint:misc --check",
     "lint:eslint": "eslint . --cache --ext js,ts",
     "lint:fix": "yarn lint:eslint --fix && yarn lint:misc --write",
-    "lint:misc": "prettier '**/*.json' '**/*.md' '!CHANGELOG.md' --ignore-path .gitignore",
+    "lint:misc": "prettier '**/*.json' '**/*.md' '!CHANGELOG.md' '!snap.manifest.json' --ignore-path .gitignore",
     "serve": "mm-snap serve -c snap.config.local.ts",
     "start": "yarn build:local && mm-snap watch -c snap.config.local.ts",
     "test": "jest"
@@ -39,7 +39,8 @@
     "ecies-geth": "^1.7.3",
     "elliptic": "^6.6.1",
     "ethereumjs-util": "^7.1.5",
-    "uuid": "^11.0.3"
+    "uuid": "^11.0.3",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@jest/globals": "^29.5.0",

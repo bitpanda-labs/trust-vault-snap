@@ -42,7 +42,7 @@ describe('onRpcRequest', () => {
       origin,
     });
     expect(getErrorMessage(response)).toBe(
-      'Update snap mode input must be an object',
+      'Input validation failed: Expected object, received array;',
     );
     response = await request({
       method: 'updateSnapMode',
@@ -50,7 +50,7 @@ describe('onRpcRequest', () => {
       origin,
     });
     expect(getErrorMessage(response)).toBe(
-      'Update snap mode input must contain a mode field',
+      'Input validation failed: mode: Required;',
     );
     response = await request({
       method: 'updateSnapMode',
@@ -58,7 +58,7 @@ describe('onRpcRequest', () => {
       origin,
     });
     expect(getErrorMessage(response)).toBe(
-      'Snap mode can only be "basic" or "enhanced"',
+      "Input validation failed: mode: Invalid enum value. Expected 'basic' | 'enhanced', received 'unknown';",
     );
 
     await request({

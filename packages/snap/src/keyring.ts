@@ -15,8 +15,8 @@ import {
   createPersonalSignDataDigest,
   createSignTypedDataDigest,
   decryptData,
-  generateEciesKeyPair,
   getAdjustedSignature,
+  wrapKeyPairOperation,
 } from './cryptography';
 import {
   accountCreated,
@@ -34,7 +34,6 @@ import {
 } from './graphql/client';
 import {
   displayProxyDialog,
-  generateEntropy,
   getMetamaskVersion,
   isUsingRpcProxy,
   saveState,
@@ -42,6 +41,7 @@ import {
 } from './snapApi';
 import type {
   AddRpcUrlInput,
+  EciesKeyPair,
   EvmTransaction,
   GetRequestResponse,
   KeyringState,
@@ -340,9 +340,10 @@ export class TrustVaultKeyring implements Keyring {
     requestId: string,
     signature: string,
   ): Promise<Buffer> {
-    const entropy = await generateEntropy(requestId);
-    const { privateKey } = await generateEciesKeyPair(entropy);
-    return await decryptData(privateKey, signature);
+    const callback = async (keyPair: EciesKeyPair) => {
+      return await decryptData(keyPair.privateKey, signature);
+    };
+    return wrapKeyPairOperation(requestId, callback);
   }
 
   async rejectRequest(_id: string): Promise<void> {
@@ -452,8 +453,8 @@ export class TrustVaultKeyring implements Keyring {
   }
 
   async #signPersonalSign(requestId: string, address: string, message: string) {
-    const entropy = await generateEntropy(requestId);
-    const { publicKey } = await generateEciesKeyPair(entropy);
+    const callback = async (keyPair: EciesKeyPair) => keyPair.publicKey;
+    const publicKey = await wrapKeyPairOperation(requestId, callback);
     const response = await createPersonalSign(
       await this.#getRequestConfiguration(),
       address,
@@ -471,8 +472,8 @@ export class TrustVaultKeyring implements Keyring {
     message: Json,
     version: SignTypedDataVersion.V3 | SignTypedDataVersion.V4,
   ) {
-    const entropy = await generateEntropy(requestId);
-    const { publicKey } = await generateEciesKeyPair(entropy);
+    const callback = async (keyPair: EciesKeyPair) => keyPair.publicKey;
+    const publicKey = await wrapKeyPairOperation(requestId, callback);
     const response = await createSignTypedData(
       await this.#getRequestConfiguration(),
       address,

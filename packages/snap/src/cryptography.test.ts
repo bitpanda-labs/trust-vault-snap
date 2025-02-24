@@ -1,4 +1,4 @@
-import { expect } from '@jest/globals';
+import { expect, jest } from '@jest/globals';
 import { SignTypedDataVersion } from '@metamask/eth-sig-util';
 import { Buffer } from 'buffer';
 import { randomBytes } from 'crypto';
@@ -11,7 +11,14 @@ import {
   EC_GROUP_ORDER,
   generateEciesKeyPair,
   getAdjustedSignature,
+  wrapKeyPairOperation,
 } from './cryptography';
+import type { EciesKeyPair } from './types';
+
+const mockGenerateEntropy = jest.fn();
+jest.mock('./snapApi', () => {
+  return { generateEntropy: (...args: any) => mockGenerateEntropy(...args) };
+});
 
 describe('Cryptography utils', () => {
   describe('ECIES encryption', () => {
@@ -30,6 +37,25 @@ describe('Cryptography utils', () => {
       const encryptedHex = encrypted.toString('hex');
       const decrypted = await decryptData(keyPair.privateKey, encryptedHex);
       expect(decrypted.toString('utf-8')).toBe(message);
+    });
+  });
+
+  describe('wrapKeyPairOperation', () => {
+    it('generates a key-pair and executes the provided operation, then empty entropy', async () => {
+      const salt = 'salt';
+      const entropy = randomBytes(32);
+      let privateKey: Buffer = Buffer.alloc(32);
+      mockGenerateEntropy.mockImplementation(async () => entropy);
+      const callback = jest.fn(async (keyPair: EciesKeyPair) => {
+        privateKey = keyPair.privateKey;
+        expect(privateKey).not.toStrictEqual(Buffer.alloc(32));
+        return 'output';
+      });
+      const output = await wrapKeyPairOperation(salt, callback);
+      expect(output).toBe('output');
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(entropy).toStrictEqual(Buffer.alloc(32));
+      expect(privateKey).toStrictEqual(Buffer.alloc(32));
     });
   });
 

@@ -25,6 +25,7 @@ jest.mock('./snapApi', () => {
     displayProxyDialog: () => mockDisplayProxyDialog(),
   };
 });
+const mockWrapKeyPairOperation = jest.fn();
 jest.mock('./cryptography', () => {
   return {
     generateEciesKeyPair: jest.fn(async () => {
@@ -40,6 +41,9 @@ jest.mock('./cryptography', () => {
       () =>
         '0xecd18717a895f58386cb13b9bd98e90ec753bffbec4e4d6ac28d25a256f28d17',
     ),
+    wrapKeyPairOperation: (...args: any) => {
+      return mockWrapKeyPairOperation(...args);
+    },
   };
 });
 const mockCreateEip1559Transaction = jest.fn();

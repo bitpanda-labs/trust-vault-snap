@@ -1,28 +1,42 @@
 import type { KeyringAccount, KeyringRequest } from '@metamask/keyring-api';
 import type { Buffer } from 'buffer';
+import { z } from 'zod';
+
+export enum SnapMode {
+  Basic = 'basic',
+  Enhanced = 'enhanced',
+}
 
 export type RequestConfiguration = {
   trustApiConfiguration: TrustApiConfiguration;
   clientInfo: string;
 };
 
-export type TrustApiConfiguration = {
-  url: string;
-  apiKey: string;
-  trustId: string;
-  token: TrustApiToken;
-};
+const TrustApiTokenSchema = z.object({
+  enc: z.string(),
+  iv: z.string(),
+  tag: z.string(),
+});
 
-export type AddRpcUrlInput = {
-  chainId: string;
-  rpcUrl: string;
-};
+export const TrustApiConfigurationSchema = z.object({
+  url: z.string(),
+  apiKey: z.string(),
+  trustId: z.string().uuid(),
+  token: TrustApiTokenSchema,
+});
 
-export type TrustApiToken = {
-  enc: string;
-  iv: string;
-  tag: string;
-};
+export const AddRpcUrlInputSchema = z.object({
+  chainId: z.string(),
+  rpcUrl: z.string(),
+});
+
+export const UpdateSnapModeInputSchema = z.object({
+  mode: z.nativeEnum(SnapMode),
+});
+
+export type TrustApiConfiguration = z.infer<typeof TrustApiConfigurationSchema>;
+export type TrustApiToken = z.infer<typeof TrustApiTokenSchema>;
+export type AddRpcUrlInput = z.infer<typeof AddRpcUrlInputSchema>;
 
 export type TrustVaultRequest = KeyringRequest & {
   trustVaultRequestId: string;
@@ -69,11 +83,6 @@ export enum TrustVaultRequestStatus {
   Cancelled = 'USER_CANCELLED',
   Blocked = 'BLOCKED',
   Errored = 'ERROR',
-}
-
-export enum SnapMode {
-  Basic = 'basic',
-  Enhanced = 'enhanced',
 }
 
 export type SignedTransaction = {

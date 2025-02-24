@@ -7,6 +7,7 @@ import { decrypt } from 'ecies-geth';
 import { ec as EC } from 'elliptic';
 import { ecrecover, keccak256, pubToAddress } from 'ethereumjs-util';
 
+import { generateEntropy } from './snapApi';
 import type { EciesKeyPair } from './types';
 import { numToHexBuffer } from './util';
 
@@ -25,10 +26,28 @@ export async function generateEciesKeyPair(
   entropy: Buffer,
 ): Promise<EciesKeyPair> {
   const keyPair = ec.genKeyPair({ entropy });
-  const privateString = keyPair.getPrivate().toString('hex', 64);
-  const privateKey = Buffer.from(privateString, 'hex');
+  const privateKey = keyPair.getPrivate().toBuffer('be', 32);
   const publicKey = keyPair.getPublic().encode('hex', false);
   return { privateKey, publicKey };
+}
+
+/**
+ * Securely creates an ECIES key-pair, calls the provided callback containing the key pair operation, zeroizes the sensitive information.
+ *
+ * @param salt - Use-case specific extra input used to generate the entropy.
+ * @param callback - A key-pair enabled operation.
+ * @returns The output of the key-pair operation.
+ */
+export async function wrapKeyPairOperation<Output>(
+  salt: string,
+  callback: (keyPair: EciesKeyPair) => Promise<Output>,
+): Promise<Output> {
+  const entropy = await generateEntropy(salt);
+  const keyPair = await generateEciesKeyPair(entropy);
+  const result = await callback(keyPair);
+  entropy.fill(0);
+  keyPair.privateKey.fill(0);
+  return result;
 }
 
 /**

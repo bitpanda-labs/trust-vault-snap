@@ -7,11 +7,15 @@ import type {
   OnKeyringRequestHandler,
 } from '@metamask/snaps-sdk';
 import { type OnRpcRequestHandler } from '@metamask/snaps-sdk';
+import { ZodError } from 'zod';
 
 import { TrustVaultKeyring } from './keyring';
 import { getState } from './snapApi';
-import type { TrustApiConfiguration, AddRpcUrlInput } from './types';
-import { getUpdatedMode } from './util';
+import {
+  AddRpcUrlInputSchema,
+  TrustApiConfigurationSchema,
+  UpdateSnapModeInputSchema,
+} from './types';
 
 /**
  * Handle incoming JSON-RPC requests, sent through `wallet_invokeSnap`.
@@ -30,29 +34,37 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
   const keyring = await getKeyring();
   let response: Json = {};
 
-  switch (request.method) {
-    case 'hello':
-      response = `hello ${origin}`;
-      break;
-    case 'addTrustApiConfiguration':
-      await keyring.addTrustApiConfiguration(
-        request.params as TrustApiConfiguration,
-      );
-      break;
-    case 'getSnapMode':
-      response = keyring.getSnapMode();
-      break;
-    case 'updateSnapMode':
-      await keyring.updateSnapMode(getUpdatedMode(request.params));
-      break;
-    case 'addRpcUrl':
-      await keyring.addRpcUrl(request.params as AddRpcUrlInput);
-      break;
-    default:
-      throw new Error('Method not found.');
+  try {
+    switch (request.method) {
+      case 'hello':
+        response = `hello ${origin}`;
+        break;
+      case 'addTrustApiConfiguration':
+        await keyring.addTrustApiConfiguration(
+          TrustApiConfigurationSchema.parse(request.params),
+        );
+        break;
+      case 'getSnapMode':
+        response = keyring.getSnapMode();
+        break;
+      case 'updateSnapMode':
+        await keyring.updateSnapMode(
+          UpdateSnapModeInputSchema.parse(request.params).mode,
+        );
+        break;
+      case 'addRpcUrl':
+        await keyring.addRpcUrl(AddRpcUrlInputSchema.parse(request.params));
+        break;
+      default:
+        throw new Error('Method not found.');
+    }
+    return response;
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw new Error(formatZodErrors(error));
+    }
+    throw error;
   }
-
-  return response;
 };
 
 let _keyring: TrustVaultKeyring;
@@ -83,8 +95,11 @@ const metamaskKeyringMethods = [
   KeyringRpcMethod.RejectRequest,
 ];
 const dappKeyringMethods = [
-  ...metamaskKeyringMethods,
+  KeyringRpcMethod.ListAccounts,
+  KeyringRpcMethod.GetAccount,
   KeyringRpcMethod.CreateAccount,
+  KeyringRpcMethod.DeleteAccount,
+  KeyringRpcMethod.GetRequest,
 ];
 
 // eslint-disable-next-line no-restricted-globals
@@ -149,3 +164,19 @@ export const onCronjob: OnCronjobHandler = async ({
       throw new Error('Method not found.');
   }
 };
+
+/**
+ * Format ZodError into an error string.
+ *
+ * @param zodError - The handled validation Error.
+ * @returns The formatted error string.
+ */
+function formatZodErrors(zodError: ZodError): string {
+  const baseMessage = 'Input validation failed:';
+  let validationErrors = '';
+  zodError.errors.forEach((error) => {
+    const path = error.path.length ? ` ${error.path.join('.')}: ` : ' ';
+    validationErrors += `${path}${error.message};`;
+  });
+  return `${baseMessage}${validationErrors}`;
+}

@@ -34,7 +34,7 @@ export async function post(config: RequestConfiguration, body: string) {
     method: 'POST',
     headers: {
       'x-api-key': config.trustApiConfiguration.apiKey,
-      'Client-Info': config.clientInfo,
+      'x-source': config.clientInfo,
     },
     body,
   };
