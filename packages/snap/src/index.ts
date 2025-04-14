@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 
-import { KeyringRpcMethod, handleKeyringRequest } from '@metamask/keyring-api';
+import { KeyringRpcMethod } from '@metamask/keyring-api';
 import type {
   Json,
   OnCronjobHandler,
@@ -9,6 +9,7 @@ import type {
 import { type OnRpcRequestHandler } from '@metamask/snaps-sdk';
 import { ZodError } from 'zod';
 
+import { handleKeyringRequest } from '@metamask/keyring-snap-sdk';
 import { TrustVaultKeyring } from './keyring';
 import { getState } from './snapApi';
 import {
@@ -96,6 +97,7 @@ const metamaskKeyringMethods = [
 ];
 const dappKeyringMethods = [
   KeyringRpcMethod.ListAccounts,
+  KeyringRpcMethod.ListRequests,
   KeyringRpcMethod.GetAccount,
   KeyringRpcMethod.CreateAccount,
   KeyringRpcMethod.DeleteAccount,
@@ -135,14 +137,14 @@ function hasPermission(origin: string, method: string): boolean {
 export const onKeyringRequest: OnKeyringRequestHandler = async ({
   origin,
   request,
-}): Promise<Json | void> => {
+}): Promise<Json> => {
   if (!hasPermission(origin, request.method)) {
     throw new Error(
       `Origin '${origin}' is not allowed to call '${request.method}'`,
     );
   }
 
-  return handleKeyringRequest(await getKeyring(), request);
+  return (await handleKeyringRequest(await getKeyring(), request)) ?? {};
 };
 
 /**

@@ -6,7 +6,7 @@ import type {
   KeyringRequest,
   SubmitRequestResponse,
 } from '@metamask/keyring-api';
-import { EthAccountType, EthMethod } from '@metamask/keyring-api';
+import { EthAccountType, EthMethod, EthScope } from '@metamask/keyring-api';
 import { add0x, isValidHexAddress, type Json } from '@metamask/utils';
 import type { Buffer } from 'buffer';
 import { v4 as uuid } from 'uuid';
@@ -54,7 +54,7 @@ import { RequestStatus, SnapMode, TrustVaultRequestStatus } from './types';
 import { throwError } from './util';
 
 export class TrustVaultKeyring implements Keyring {
-  #state: KeyringState;
+  readonly #state: KeyringState;
 
   constructor(state: KeyringState) {
     this.#state = state;
@@ -91,6 +91,7 @@ export class TrustVaultKeyring implements Keyring {
       const account: KeyringAccount = {
         id: uuid(),
         options,
+        scopes: [EthScope.Eoa],
         address,
         methods: [
           EthMethod.PersonalSign,
@@ -167,7 +168,7 @@ export class TrustVaultKeyring implements Keyring {
 
   async checkPendingRequests(): Promise<void> {
     if (!(await this.checkProxyUsage())) {
-      console.log(
+      console.warn(
         'Snap is in enhanced mode but TrustVault proxy is not configured',
       );
       return;
@@ -187,7 +188,7 @@ export class TrustVaultKeyring implements Keyring {
       await this.#checkAndFinaliseRequest(request);
     } catch (error) {
       const message = `Failed to retrieve transaction info for ${request.trustVaultRequestId}`;
-      console.log(`${message}, error: ${(error as Error).message}`);
+      console.error(`${message}, error: ${(error as Error).message}`);
     }
   }
 
@@ -219,7 +220,9 @@ export class TrustVaultKeyring implements Keyring {
     }
   }
 
-  async #checkAndFinaliseTransaction(request: TrustVaultRequest) {
+  async #checkAndFinaliseTransaction(
+    request: TrustVaultRequest,
+  ): Promise<void> {
     const transactionInfo = await this.#getTransactionInfo(request);
 
     if (this.#isFailedStatus(transactionInfo.status)) {
@@ -241,7 +244,9 @@ export class TrustVaultKeyring implements Keyring {
     await requestApproved({ id: request.id, result });
   }
 
-  async #checkAndFinalisePersonalSign(request: TrustVaultRequest) {
+  async #checkAndFinalisePersonalSign(
+    request: TrustVaultRequest,
+  ): Promise<void> {
     const requestInfo = await this.#getRequest(request);
     if (!this.#isFinalStatus(requestInfo.status)) {
       return;
@@ -257,7 +262,7 @@ export class TrustVaultKeyring implements Keyring {
   async #checkAndFinaliseSignTypedData(
     request: TrustVaultRequest,
     version: SignTypedDataVersion.V3 | SignTypedDataVersion.V4,
-  ) {
+  ): Promise<void> {
     const requestInfo = await this.#getRequest(request);
     if (!this.#isFinalStatus(requestInfo.status)) {
       return;
@@ -340,7 +345,7 @@ export class TrustVaultKeyring implements Keyring {
     requestId: string,
     signature: string,
   ): Promise<Buffer> {
-    const callback = async (keyPair: EciesKeyPair) => {
+    const callback = async (keyPair: EciesKeyPair): Promise<Buffer> => {
       return await decryptData(keyPair.privateKey, signature);
     };
     return wrapKeyPairOperation(requestId, callback);
@@ -452,8 +457,13 @@ export class TrustVaultKeyring implements Keyring {
     return response.requestId;
   }
 
-  async #signPersonalSign(requestId: string, address: string, message: string) {
-    const callback = async (keyPair: EciesKeyPair) => keyPair.publicKey;
+  async #signPersonalSign(
+    requestId: string,
+    address: string,
+    message: string,
+  ): Promise<string> {
+    const callback = async (keyPair: EciesKeyPair): Promise<string> =>
+      keyPair.publicKey;
     const publicKey = await wrapKeyPairOperation(requestId, callback);
     const response = await createPersonalSign(
       await this.#getRequestConfiguration(),
@@ -471,8 +481,9 @@ export class TrustVaultKeyring implements Keyring {
     address: string,
     message: Json,
     version: SignTypedDataVersion.V3 | SignTypedDataVersion.V4,
-  ) {
-    const callback = async (keyPair: EciesKeyPair) => keyPair.publicKey;
+  ): Promise<string> {
+    const callback = async (keyPair: EciesKeyPair): Promise<string> =>
+      keyPair.publicKey;
     const publicKey = await wrapKeyPairOperation(requestId, callback);
     const response = await createSignTypedData(
       await this.#getRequestConfiguration(),
@@ -486,7 +497,7 @@ export class TrustVaultKeyring implements Keyring {
     return response.requestId;
   }
 
-  async #updateRequestStatus(id: string, status: RequestStatus) {
+  async #updateRequestStatus(id: string, status: RequestStatus): Promise<void> {
     const request = await this.getRequest(id);
     this.#state.requests[request.id] = { ...request, status };
     await this.#saveState();
@@ -525,7 +536,7 @@ export class TrustVaultKeyring implements Keyring {
     return isUsingProxy;
   }
 
-  async addRpcUrl(input: AddRpcUrlInput) {
+  async addRpcUrl(input: AddRpcUrlInput): Promise<void> {
     this.#state.rpcUrls[input.chainId] = input.rpcUrl;
     await this.#saveState();
   }

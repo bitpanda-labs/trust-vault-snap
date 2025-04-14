@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, jest } from '@jest/globals';
 import type { KeyringAccount, KeyringRequest } from '@metamask/keyring-api';
-import { EthAccountType, EthMethod } from '@metamask/keyring-api';
+import { EthAccountType, EthMethod, EthScope } from '@metamask/keyring-api';
 import { randomBytes } from 'crypto';
 import { v4 as uuid, validate as validateUUID } from 'uuid';
 
@@ -520,6 +520,7 @@ function createAccount(name: string, address: string): KeyringAccount {
   return {
     id: uuid(),
     options: { name, address },
+    scopes: [EthScope.Eoa],
     address,
     methods: [
       EthMethod.PersonalSign,

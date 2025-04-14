@@ -58,8 +58,8 @@ export async function generateEntropy(salt: string): Promise<Buffer> {
     });
     return Buffer.from(remove0x(entropyString), 'hex');
   } catch (error) {
-    console.log(
-      `Failed to generate entropy, error ${(error as Error).message}`,
+    console.error(
+      `Failed to generate entropy, error: ${(error as Error).message}`,
     );
     throw error;
   }

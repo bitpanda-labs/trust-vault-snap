@@ -1,5 +1,5 @@
-import { emitSnapKeyringEvent, KeyringEvent } from '@metamask/keyring-api';
-import type { Json } from '@metamask/utils';
+import { KeyringEvent, KeyringEventPayload } from '@metamask/keyring-api';
+import { emitSnapKeyringEvent } from '@metamask/keyring-snap-sdk';
 
 /**
  * Emits an AccountCreated keyring event.
@@ -7,7 +7,7 @@ import type { Json } from '@metamask/utils';
  * @param data - The payload of the event.
  */
 export async function accountCreated(
-  data: Record<string, Json>,
+  data: KeyringEventPayload<KeyringEvent>,
 ): Promise<void> {
   await emitEvent(KeyringEvent.AccountCreated, data);
 }
@@ -18,7 +18,7 @@ export async function accountCreated(
  * @param data - The payload of the event.
  */
 export async function accountDeleted(
-  data: Record<string, Json>,
+  data: KeyringEventPayload<KeyringEvent>,
 ): Promise<void> {
   await emitEvent(KeyringEvent.AccountDeleted, data);
 }
@@ -29,7 +29,7 @@ export async function accountDeleted(
  * @param data - The payload of the event.
  */
 export async function requestApproved(
-  data: Record<string, Json>,
+  data: KeyringEventPayload<KeyringEvent>,
 ): Promise<void> {
   await emitEvent(KeyringEvent.RequestApproved, data);
 }
@@ -40,7 +40,7 @@ export async function requestApproved(
  * @param data - The payload of the event.
  */
 export async function requestRejected(
-  data: Record<string, Json>,
+  data: KeyringEventPayload<KeyringEvent>,
 ): Promise<void> {
   await emitEvent(KeyringEvent.RequestRejected, data);
 }
@@ -53,7 +53,7 @@ export async function requestRejected(
  */
 async function emitEvent(
   event: KeyringEvent,
-  data: Record<string, Json>,
+  data: KeyringEventPayload<KeyringEvent>,
 ): Promise<void> {
   await emitSnapKeyringEvent(snap, event, data);
 }

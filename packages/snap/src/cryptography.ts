@@ -26,7 +26,7 @@ export async function generateEciesKeyPair(
   entropy: Buffer,
 ): Promise<EciesKeyPair> {
   const keyPair = ec.genKeyPair({ entropy });
-  const privateKey = keyPair.getPrivate().toBuffer('be', 32);
+  const privateKey = keyPair.getPrivate().toArrayLike(Buffer, 'be', 32);
   const publicKey = keyPair.getPublic().encode('hex', false);
   return { privateKey, publicKey };
 }
@@ -125,7 +125,7 @@ export function getAdjustedSignature(
  * @param sValue - The signature s value.
  * @returns The adjusted s value.
  */
-function adjustSignatureSValue(sValue: Buffer) {
+function adjustSignatureSValue(sValue: Buffer): Buffer {
   if (sValue.length < 32) {
     return sValue;
   }

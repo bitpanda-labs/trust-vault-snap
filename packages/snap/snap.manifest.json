@@ -1,5 +1,5 @@
 {
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "An account management snap that interacts with Bitpanda Custody subwallets to sign transactions",
   "proposedName": "TrustVault",
   "repository": {
@@ -7,7 +7,7 @@
     "url": "git+git@github.com:bitpanda-labs/trust-vault-snap.git"
   },
   "source": {
-    "shasum": "SVjEPDvyPvMKuVsB54ZzFt2nr2GYzNBlvop84JdmgeU=",
+    "shasum": "i2fWuYiwzlgat/9dW+20oGUWOuoalt7QKghE4WjMz30=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
