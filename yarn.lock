@@ -1594,7 +1594,7 @@ __metadata:
     "@metamask/keyring-snap-sdk": ^3.2.0
     "@metamask/snaps-cli": ^6.7.0
     "@metamask/snaps-jest": ^8.14.1
-    "@metamask/snaps-sdk": ^6.22.0
+    "@metamask/snaps-sdk": 6.21.0
     "@metamask/utils": ^11.4.0
     "@types/elliptic": ^6.4.18
     "@types/jest": ^29.5.14
@@ -3158,6 +3158,19 @@ __metadata:
     "@noble/hashes": ^1.7.1
     luxon: ^3.5.0
   checksum: ab7f0bc0b1899b6de372cd42f17d428467fbed03c8ed52c800976a4c48c73520f3bee4898d4431d863a6bfb19078cdeb68f46b983add3480c5a1beb70bee779c
+  languageName: node
+  linkType: hard
+
+"@metamask/snaps-sdk@npm:6.21.0":
+  version: 6.21.0
+  resolution: "@metamask/snaps-sdk@npm:6.21.0"
+  dependencies:
+    "@metamask/key-tree": ^10.1.1
+    "@metamask/providers": ^21.0.0
+    "@metamask/rpc-errors": ^7.0.2
+    "@metamask/superstruct": ^3.1.0
+    "@metamask/utils": ^11.2.0
+  checksum: ed4e98bf40a30b466e4a04e58d68edfca02e33f6a1ae207052622d4e16510b61d807e243d62ac1730b9b0c7d76281a4741a094d8f8c141724d49cdfc15566e31
   languageName: node
   linkType: hard
 
