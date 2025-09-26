@@ -12,6 +12,11 @@ export type RequestConfiguration = {
   clientInfo: string;
 };
 
+export type Credentials = {
+  trustId: string;
+  token: TrustApiToken;
+};
+
 const TrustApiTokenSchema = z.object({
   enc: z.string(),
   iv: z.string(),
@@ -30,6 +35,10 @@ export const AddRpcUrlInputSchema = z.object({
   rpcUrl: z.string(),
 });
 
+export const CheckAuthInputSchema = z.object({
+  trustId: z.string().uuid(),
+});
+
 export const UpdateSnapModeInputSchema = z.object({
   mode: z.nativeEnum(SnapMode),
 });
@@ -37,6 +46,7 @@ export const UpdateSnapModeInputSchema = z.object({
 export type TrustApiConfiguration = z.infer<typeof TrustApiConfigurationSchema>;
 export type TrustApiToken = z.infer<typeof TrustApiTokenSchema>;
 export type AddRpcUrlInput = z.infer<typeof AddRpcUrlInputSchema>;
+export type CheckAuthInput = z.infer<typeof CheckAuthInputSchema>;
 
 export type TrustVaultRequest = KeyringRequest & {
   trustVaultRequestId: string;
@@ -54,6 +64,7 @@ export type KeyringState = {
   accounts: Record<string, KeyringAccount>;
   requests: Record<string, TrustVaultRequest>;
   rpcUrls: Record<string, string>;
+  trustIdToToken: Record<string, TrustApiToken>;
   mode: SnapMode;
 };
 

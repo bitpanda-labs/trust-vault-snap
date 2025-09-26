@@ -41,6 +41,7 @@ import {
 } from './snapApi';
 import type {
   AddRpcUrlInput,
+  Credentials,
   EciesKeyPair,
   EvmTransaction,
   GetRequestResponse,
@@ -48,6 +49,7 @@ import type {
   RequestConfiguration,
   TransactionInfoResponse,
   TrustApiConfiguration,
+  TrustApiToken,
   TrustVaultRequest,
 } from './types';
 import { RequestStatus, SnapMode, TrustVaultRequestStatus } from './types';
@@ -73,7 +75,7 @@ export class TrustVaultKeyring implements Keyring {
   async createAccount(
     options: Record<string, Json> = {},
   ): Promise<KeyringAccount> {
-    const { address, name } = options;
+    const { address, name, trustId, token } = options;
     if (typeof name !== 'string') {
       throw new Error('Provided account name must be a string');
     }
@@ -86,6 +88,11 @@ export class TrustVaultKeyring implements Keyring {
     if (this.#addressesInUse().includes(address)) {
       throw new Error(`Address ${address} already in use`);
     }
+    if (typeof trustId !== 'string') {
+      throw new Error(`Provided Trust ID ${trustId} is not a string`);
+    }
+
+    this.mapTrustIdToToken(trustId, token as TrustApiToken);
 
     try {
       const account: KeyringAccount = {
@@ -294,20 +301,30 @@ export class TrustVaultKeyring implements Keyring {
   async #getTransactionInfo(
     request: TrustVaultRequest,
   ): Promise<TransactionInfoResponse> {
+    if (!this.#state.trustApiConfiguration) {
+      throw new Error('Missing trust api configuration');
+    }
+
+    const accountId = request.account;
+
     return await fetchTransactionInfo(
       await this.#getRequestConfiguration(),
+      this.#resolveCredentials(this.#getAccountFromId(accountId)),
       request.trustVaultRequestId,
-      async (config: TrustApiConfiguration) =>
-        await this.addTrustApiConfiguration(config),
     );
   }
 
   async #getRequest(request: TrustVaultRequest): Promise<GetRequestResponse> {
+    if (!this.#state.trustApiConfiguration) {
+      throw new Error('Missing trust api configuration');
+    }
+
+    const accountId = request.account;
+
     return getRequest(
       await this.#getRequestConfiguration(),
+      this.#resolveCredentials(this.#getAccountFromId(accountId)),
       request.trustVaultRequestId,
-      async (config: TrustApiConfiguration) =>
-        await this.addTrustApiConfiguration(config),
     );
   }
 
@@ -321,6 +338,7 @@ export class TrustVaultKeyring implements Keyring {
     );
     const [message, address] = request.request.params as [string, string];
     const digest = createPersonalSignDataDigest(message);
+
     return getAdjustedSignature(digest, decrypted, address);
   }
 
@@ -338,6 +356,7 @@ export class TrustVaultKeyring implements Keyring {
       TypedMessage<MessageTypes>,
     ];
     const digest = createSignTypedDataDigest(message, version);
+
     return getAdjustedSignature(digest, decrypted, address);
   }
 
@@ -348,6 +367,7 @@ export class TrustVaultKeyring implements Keyring {
     const callback = async (keyPair: EciesKeyPair): Promise<Buffer> => {
       return await decryptData(keyPair.privateKey, signature);
     };
+
     return wrapKeyPairOperation(requestId, callback);
   }
 
@@ -409,6 +429,7 @@ export class TrustVaultKeyring implements Keyring {
 
   async #signTransaction(transaction: EvmTransaction): Promise<string> {
     if (!(await this.checkProxyUsage())) {
+      await displayProxyDialog();
       throw new Error(
         'Snap is in enhanced mode but TrustVault proxy is not configured',
       );
@@ -433,12 +454,12 @@ export class TrustVaultKeyring implements Keyring {
   ): Promise<string> {
     const response = await createEip1559Transaction(
       await this.#getRequestConfiguration(),
+      this.#resolveCredentials(this.#getAccountFromAddress(transaction.from)),
       transaction,
       this.#state.mode === SnapMode.Enhanced,
-      async (config: TrustApiConfiguration) =>
-        await this.addTrustApiConfiguration(config),
       rpcUrl,
     );
+
     return response.requestId;
   }
 
@@ -448,12 +469,12 @@ export class TrustVaultKeyring implements Keyring {
   ): Promise<string> {
     const response = await createLegacyTransaction(
       await this.#getRequestConfiguration(),
+      this.#resolveCredentials(this.#getAccountFromAddress(transaction.from)),
       transaction,
       this.#state.mode === SnapMode.Enhanced,
-      async (config: TrustApiConfiguration) =>
-        await this.addTrustApiConfiguration(config),
       rpcUrl,
     );
+
     return response.requestId;
   }
 
@@ -467,12 +488,12 @@ export class TrustVaultKeyring implements Keyring {
     const publicKey = await wrapKeyPairOperation(requestId, callback);
     const response = await createPersonalSign(
       await this.#getRequestConfiguration(),
+      this.#resolveCredentials(this.#getAccountFromAddress(address)),
       address,
       message,
       publicKey,
-      async (config: TrustApiConfiguration) =>
-        await this.addTrustApiConfiguration(config),
     );
+
     return response.requestId;
   }
 
@@ -487,13 +508,13 @@ export class TrustVaultKeyring implements Keyring {
     const publicKey = await wrapKeyPairOperation(requestId, callback);
     const response = await createSignTypedData(
       await this.#getRequestConfiguration(),
+      this.#resolveCredentials(this.#getAccountFromAddress(address)),
       address,
       message,
       version,
       publicKey,
-      async (config: TrustApiConfiguration) =>
-        await this.addTrustApiConfiguration(config),
     );
+
     return response.requestId;
   }
 
@@ -518,6 +539,7 @@ export class TrustVaultKeyring implements Keyring {
     const metamaskVersion = await getMetamaskVersion();
     const { mode } = this.#state;
     const clientInfo = `mm:${metamaskVersion}/snap:${snapVersion}/mode:${mode}`;
+
     return {
       trustApiConfiguration: this.#state
         .trustApiConfiguration as TrustApiConfiguration,
@@ -530,9 +552,7 @@ export class TrustVaultKeyring implements Keyring {
       return true;
     }
     const isUsingProxy = await isUsingRpcProxy();
-    if (!isUsingProxy) {
-      await displayProxyDialog();
-    }
+
     return isUsingProxy;
   }
 
@@ -548,7 +568,61 @@ export class TrustVaultKeyring implements Keyring {
     if (!(chainId in this.#state.rpcUrls)) {
       throw new Error(`ChainId ${chainId} does not correspond to an rpc url`);
     }
+
     return this.#state.rpcUrls[chainId];
+  }
+
+  async mapTrustIdToToken(trustId: string, token: TrustApiToken) {
+    this.#state.trustIdToToken[trustId] = token;
+    await this.#saveState();
+  }
+
+  #getAccountFromId(id: string): KeyringAccount {
+    const account = this.#state.accounts[id];
+    if (!account) {
+      throw new Error(`Account with id ${id} not found`);
+    }
+
+    return account;
+  }
+
+  #getAccountFromAddress(address: string): KeyringAccount {
+    const lowercaseAddress = this.lowercaseHexAddress(address);
+    const account = Object.values(this.#state.accounts).find(
+      (acc) => this.lowercaseHexAddress(acc.address) === lowercaseAddress,
+    );
+    if (!account) {
+      throw new Error(`Account with address ${lowercaseAddress} not found`);
+    }
+
+    return account;
+  }
+
+  /**
+   * Gets the JWT for the address
+   * @param address
+   */
+  #resolveCredentials(account: KeyringAccount): Credentials {
+    const trustId = account.options.trustId;
+    if (!trustId) {
+      throw new Error(
+        `Trust ID not found ${trustId}, provided address: ${account.address} and address in state: ${this.#state.accounts[0]?.address}`,
+      );
+    }
+    if (typeof trustId !== 'string') {
+      throw new Error(`Trust ID: ${trustId} is not a string`);
+    }
+
+    const token = this.#state.trustIdToToken[trustId];
+    if (!token) {
+      throw new Error(`Token not found for trustId: ${trustId}`);
+    }
+
+    return { trustId, token };
+  }
+
+  lowercaseHexAddress(address: string): string {
+    return add0x(address).toLowerCase();
   }
 
   async #saveState(): Promise<void> {

@@ -14,6 +14,8 @@ import { TrustVaultKeyring } from './keyring';
 import { getState } from './snapApi';
 import {
   AddRpcUrlInputSchema,
+  CheckAuthInput,
+  CheckAuthInputSchema,
   TrustApiConfigurationSchema,
   UpdateSnapModeInputSchema,
 } from './types';
@@ -37,12 +39,14 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
 
   try {
     switch (request.method) {
-      case 'hello':
-        response = `hello ${origin}`;
-        break;
       case 'addTrustApiConfiguration':
-        await keyring.addTrustApiConfiguration(
-          TrustApiConfigurationSchema.parse(request.params),
+        const trustApiConfiguration = TrustApiConfigurationSchema.parse(
+          request.params,
+        );
+        await keyring.addTrustApiConfiguration(trustApiConfiguration);
+        await keyring.mapTrustIdToToken(
+          trustApiConfiguration.trustId,
+          trustApiConfiguration.token,
         );
         break;
       case 'getSnapMode':
@@ -56,6 +60,9 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
       case 'addRpcUrl':
         await keyring.addRpcUrl(AddRpcUrlInputSchema.parse(request.params));
         break;
+      case 'checkAuth':
+        response = await checkAuth(CheckAuthInputSchema.parse(request.params));
+        break;
       default:
         throw new Error('Method not found.');
     }
@@ -66,6 +73,11 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
     }
     throw error;
   }
+};
+
+const checkAuth = async (params: CheckAuthInput): Promise<Json> => {
+  const state = await getState();
+  return { authenticated: !!state.trustIdToToken[params.trustId] };
 };
 
 let _keyring: TrustVaultKeyring;

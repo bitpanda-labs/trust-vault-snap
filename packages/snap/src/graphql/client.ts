@@ -1,13 +1,15 @@
 import type { Json } from '@metamask/utils';
 
+import { notifyInvalidSession, refreshCredentials } from '../auth';
+import { getState, saveState } from '../snapApi';
 import type {
   CreateTransactionResponse,
+  Credentials,
   EvmTransaction,
-  TrustApiConfiguration,
-  TrustApiToken,
-  TransactionInfoResponse,
   GetRequestResponse,
   RequestConfiguration,
+  TransactionInfoResponse,
+  TrustApiToken,
 } from '../types';
 import {
   createEip1559TransactionMutation,
@@ -19,7 +21,6 @@ import {
   refreshAuthTokenQuery,
 } from './queries';
 
-export type UpdateConfig = (config: TrustApiConfiguration) => Promise<void>;
 export type CreateQuery = (token: TrustApiToken) => string;
 
 /**
@@ -58,15 +59,15 @@ export async function post(config: RequestConfiguration, body: string) {
  *
  * @param createQuery - A function that produces a GraphQl query.
  * @param config - The GQL request configuration object.
- * @param updateConfig - Callback to be called when the token has been updated.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @returns The GraphQL query.
  */
 export async function graphQLRequest(
   createQuery: CreateQuery,
   config: RequestConfiguration,
-  updateConfig: UpdateConfig,
+  credentials: Credentials,
 ): Promise<any> {
-  const query = createQuery(config.trustApiConfiguration.token);
+  const query = createQuery(credentials.token);
   const body = JSON.stringify({ query });
   const result = await post(config, body);
   const response = await result.json();
@@ -74,21 +75,21 @@ export async function graphQLRequest(
 
   if (errors) {
     if (errors[0]?.errorType?.includes('INVALID_SESSION_TOKEN')) {
-      const refreshedToken = await refreshAuthToken(config);
+      const refreshedToken = await refreshAuthToken(
+        config,
+        credentials.token,
+        credentials.trustId,
+      );
       const { enc, iv, tag } = refreshedToken;
       if (!enc || !iv || !tag) {
         throw new Error('Failed to refresh auth token');
       }
-      const refreshedApiConfig = {
-        ...config.trustApiConfiguration,
+
+      await refreshCredentials(credentials.trustId, refreshedToken);
+      return graphQLRequest(createQuery, config, {
+        trustId: credentials.trustId,
         token: refreshedToken,
-      };
-      await updateConfig(refreshedApiConfig);
-      const refreshedConfig = {
-        ...config,
-        trustApiConfiguration: refreshedApiConfig,
-      };
-      return graphQLRequest(createQuery, refreshedConfig, updateConfig);
+      });
     }
 
     throw new Error(
@@ -107,13 +108,17 @@ export async function graphQLRequest(
  */
 export async function refreshAuthToken(
   config: RequestConfiguration,
+  token: TrustApiToken,
+  trustId: string,
 ): Promise<TrustApiToken> {
   const body = JSON.stringify({
-    query: refreshAuthTokenQuery(config.trustApiConfiguration.token),
+    query: refreshAuthTokenQuery(token),
   });
   const result = await post(config, body);
   const { data, errors } = await result.json();
   if (errors) {
+    await removeInvalidCredentials(trustId);
+    await notifyInvalidSession(trustId);
     throw new Error(
       `Failed to refresh token, error: ${JSON.stringify(errors)}`,
     );
@@ -121,26 +126,32 @@ export async function refreshAuthToken(
   return data.refreshAuthenticationTokens;
 }
 
+async function removeInvalidCredentials(trustId: string) {
+  const state = await getState();
+  delete state.trustIdToToken[trustId];
+  saveState(state);
+}
+
 /**
  * Creates an eip-1559 transaction request in TrustVault.
  *
  * @param config - The GQL request configuration object.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @param transaction - The eip-1559 transaction body.
  * @param submit - Whether TrustVault should submit the transaction after signing.
- * @param updateConfig - Callback to be called when the token has been updated.
  * @param rpcUrl - EVM Node to be used, if provided, for submitting the tx.
  * @returns The TrustVault created transaction response.
  */
 export async function createEip1559Transaction(
   config: RequestConfiguration,
+  credentials: Credentials,
   transaction: EvmTransaction,
   submit: boolean,
-  updateConfig: UpdateConfig,
   rpcUrl?: string,
 ): Promise<CreateTransactionResponse> {
   const createQuery = (token: TrustApiToken) =>
     createEip1559TransactionMutation(token, transaction, submit, rpcUrl);
-  const response = await graphQLRequest(createQuery, config, updateConfig);
+  const response = await graphQLRequest(createQuery, config, credentials);
   return response.data.createEIP1559Transaction;
 }
 
@@ -148,22 +159,22 @@ export async function createEip1559Transaction(
  * Creates a legacy EVM transaction request in TrustVault.
  *
  * @param config - The GQL request configuration object.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @param transaction - The transaction body.
  * @param submit - Whether TrustVault should submit the transaction after signing.
- * @param updateConfig - Callback to be called when the token has been updated.
  * @param rpcUrl - EVM Node to be used, if provided, for submitting the tx.
  * @returns The TrustVault created transaction response.
  */
 export async function createLegacyTransaction(
   config: RequestConfiguration,
+  credentials: Credentials,
   transaction: EvmTransaction,
   submit: boolean,
-  updateConfig: UpdateConfig,
   rpcUrl?: string,
 ): Promise<CreateTransactionResponse> {
   const createQuery = (token: TrustApiToken) =>
     createEthereumTransactionMutation(token, transaction, submit, rpcUrl);
-  const response = await graphQLRequest(createQuery, config, updateConfig);
+  const response = await graphQLRequest(createQuery, config, credentials);
   return response.data.createEthereumTransaction;
 }
 
@@ -171,20 +182,20 @@ export async function createLegacyTransaction(
  * Creates a SignTypedData EVM request in TrustVault.
  *
  * @param config - The GQL request configuration object.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @param address - The invoking address.
  * @param message - The typed data message.
  * @param version - The SignTypedData version.
  * @param eciesPublicKey - The ECIES public key to encrypt the signature with.
- * @param updateConfig - Callback to be called when the token has been updated.
  * @returns The TrustVault created transaction response.
  */
 export async function createSignTypedData(
   config: RequestConfiguration,
+  credentials: Credentials,
   address: string,
   message: Json,
   version: string,
   eciesPublicKey: string,
-  updateConfig: UpdateConfig,
 ): Promise<CreateTransactionResponse> {
   const createQuery = (token: TrustApiToken) =>
     createEthSignTypedDataMutation(
@@ -194,7 +205,7 @@ export async function createSignTypedData(
       version,
       eciesPublicKey,
     );
-  const response = await graphQLRequest(createQuery, config, updateConfig);
+  const response = await graphQLRequest(createQuery, config, credentials);
   return response.data.createEthSignTypedData;
 }
 
@@ -202,22 +213,22 @@ export async function createSignTypedData(
  * Creates a PersonalSign EVM request in TrustVault.
  *
  * @param config - The GQL request configuration object.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @param address - The invoking address.
  * @param message - The personal sign message.
  * @param eciesPublicKey - The ECIES public key to encrypt the signature with.
- * @param updateConfig - Callback to be called when the token has been updated.
  * @returns The TrustVault created transaction response.
  */
 export async function createPersonalSign(
   config: RequestConfiguration,
+  credentials: Credentials,
   address: string,
   message: string,
   eciesPublicKey: string,
-  updateConfig: UpdateConfig,
 ): Promise<CreateTransactionResponse> {
   const createQuery = (token: TrustApiToken) =>
     createEthPersonalSignMutation(token, address, message, eciesPublicKey);
-  const response = await graphQLRequest(createQuery, config, updateConfig);
+  const response = await graphQLRequest(createQuery, config, credentials);
   return response.data.createEthPersonalSign;
 }
 
@@ -225,18 +236,18 @@ export async function createPersonalSign(
  * Fetches transaction information for a TrustVault request.
  *
  * @param config - The GQL request configuration object.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @param trustVaultRequestId - The TrustVault request identifier.
- * @param updateConfig - Callback to be called when the token has been updated.
  * @returns The transaction information.
  */
 export async function fetchTransactionInfo(
   config: RequestConfiguration,
+  credentials: Credentials,
   trustVaultRequestId: string,
-  updateConfig: UpdateConfig,
 ): Promise<TransactionInfoResponse> {
   const createQuery = (token: TrustApiToken) =>
     getTransactionInfoQuery(token, trustVaultRequestId);
-  const response = await graphQLRequest(createQuery, config, updateConfig);
+  const response = await graphQLRequest(createQuery, config, credentials);
   return response.data.transactionInfo;
 }
 
@@ -244,17 +255,17 @@ export async function fetchTransactionInfo(
  * Gets a TrustVault request.
  *
  * @param config - The GQL request configuration object.
+ * @param credentials - TAPI token and trustId for the address initiating the transaction
  * @param trustVaultRequestId - The TrustVault request identifier.
- * @param updateConfig - Callback to be called when the token has been updated.
  * @returns The transaction information.
  */
 export async function getRequest(
   config: RequestConfiguration,
+  credentials: Credentials,
   trustVaultRequestId: string,
-  updateConfig: UpdateConfig,
 ): Promise<GetRequestResponse> {
   const createQuery = (token: TrustApiToken) =>
     getRequestQuery(token, trustVaultRequestId);
-  const response = await graphQLRequest(createQuery, config, updateConfig);
+  const response = await graphQLRequest(createQuery, config, credentials);
   return response.data.getRequest;
 }

@@ -1,6 +1,6 @@
 {
   "name": "@bitpandacustody/trust-vault-snap",
-  "version": "0.1.11",
+  "version": "1.0.0",
   "description": "An account management snap that interacts with Bitpanda Custody subwallets to sign transactions.",
   "repository": {
     "type": "git",

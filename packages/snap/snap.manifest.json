@@ -1,5 +1,5 @@
 {
-  "version": "0.1.11",
+  "version": "1.0.0",
   "description": "An account management snap that interacts with Bitpanda Custody subwallets to sign transactions",
   "proposedName": "TrustVault",
   "repository": {
@@ -7,7 +7,7 @@
     "url": "git+git@github.com:bitpanda-labs/trust-vault-snap.git"
   },
   "source": {
-    "shasum": "uut4UpKYFQHuPHFSs+l5k5nLBGcrMMeF8WeM3Xodx0s=",
+    "shasum": "Xwz5Oe/eiV0l0ixSzdvoqLkIM4sCCa1H2BC9QL3m8/U=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
@@ -19,20 +19,17 @@
   },
   "initialPermissions": {
     "endowment:keyring": {
-      "allowedOrigins": [
-        "http://localhost:8083"
-      ]
+      "allowedOrigins": ["http://localhost:8083"]
     },
     "snap_dialog": {},
+    "snap_notify": {},
     "endowment:network-access": {},
     "endowment:ethereum-provider": {},
     "snap_manageAccounts": {},
     "snap_manageState": {},
     "snap_getEntropy": {},
     "endowment:rpc": {
-      "allowedOrigins": [
-        "http://localhost:8083"
-      ]
+      "allowedOrigins": ["http://localhost:8083"]
     },
     "endowment:cronjob": {
       "jobs": [

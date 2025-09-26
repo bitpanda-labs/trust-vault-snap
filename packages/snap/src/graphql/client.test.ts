@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, jest } from '@jest/globals';
-
+import { mockValues } from '../testHelpers';
 import type { TrustApiToken } from '../types';
 import { TrustVaultRequestStatus } from '../types';
-import type { UpdateConfig } from './client';
 import {
   createEip1559Transaction,
   createLegacyTransaction,
@@ -42,9 +41,35 @@ const transaction = {
   type: '0x2',
 };
 
+const mockCredentials = {
+  trustId: mockValues.trustId,
+  token: mockValues.token,
+};
+
 // eslint-disable-next-line no-restricted-globals
 let mockFetch = jest.spyOn(global, 'fetch');
 const createQuery = jest.fn((token: TrustApiToken) => `${token.iv} query`);
+
+jest.mock('../snapApi', () => {
+  const { SnapMode } = require('../types');
+  let internalState: import('../types').KeyringState = {
+    accounts: {},
+    requests: {},
+    rpcUrls: {},
+    trustIdToToken: {},
+    mode: SnapMode.Basic,
+  };
+  return {
+    getState: jest
+      .fn<() => Promise<import('../types').KeyringState>>()
+      .mockImplementation(async () => internalState),
+    saveState: jest
+      .fn<(s: import('../types').KeyringState) => Promise<void>>()
+      .mockImplementation(async (s) => {
+        internalState = s;
+      }),
+  };
+});
 
 describe('GraphQL client', () => {
   beforeEach(() => {
@@ -56,8 +81,11 @@ describe('GraphQL client', () => {
     it('returns the response object on a successful request', async () => {
       const responseData = { status: 'ok' };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
-      const response = await graphQLRequest(createQuery, config, updateConfig);
+      const response = await graphQLRequest(
+        createQuery,
+        config,
+        mockCredentials,
+      );
       expect(mockFetch).toHaveBeenCalled();
       expect(response).toMatchObject(responseData);
     });
@@ -71,9 +99,8 @@ describe('GraphQL client', () => {
           throw new Error('fail');
         },
       );
-      const updateConfig = jest.fn() as UpdateConfig;
       await expect(
-        async () => await graphQLRequest(createQuery, config, updateConfig),
+        async () => await graphQLRequest(createQuery, config, mockCredentials),
       ).rejects.toThrow('Failed to reach TrustApi, error: fail');
     });
 
@@ -89,18 +116,16 @@ describe('GraphQL client', () => {
           });
         },
       );
-      const updateConfig = jest.fn() as UpdateConfig;
       await expect(
-        async () => await graphQLRequest(createQuery, config, updateConfig),
+        async () => await graphQLRequest(createQuery, config, mockCredentials),
       ).rejects.toThrow('TrustApi returned a non-successful status code: 404');
     });
 
     it('throws an error on a TrustVault error response', async () => {
       const responseData = { errors: ['error'] };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
       await expect(
-        async () => await graphQLRequest(createQuery, config, updateConfig),
+        async () => await graphQLRequest(createQuery, config, mockCredentials),
       ).rejects.toThrow(
         `TrustApi returned an error response: ${JSON.stringify(
           responseData.errors,
@@ -124,11 +149,13 @@ describe('GraphQL client', () => {
       mockFetch = mockFetchImpl(mockFetch, errorData);
       mockFetch = mockFetchImpl(mockFetch, tokenData);
       mockFetch = mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
-      const response = await graphQLRequest(createQuery, config, updateConfig);
+      const response = await graphQLRequest(
+        createQuery,
+        config,
+        mockCredentials,
+      );
       expect(response).toMatchObject(responseData);
       expect(mockFetch).toHaveBeenCalledTimes(3);
-      expect(updateConfig).toHaveBeenCalled();
       expect(createQuery).toHaveBeenCalledTimes(2);
       expect(createQuery.mock.calls[0]?.[0]).toMatchObject(
         config.trustApiConfiguration.token,
@@ -155,12 +182,11 @@ describe('GraphQL client', () => {
         },
       };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
       const response = await createEip1559Transaction(
         config,
+        mockCredentials,
         transaction,
         false,
-        updateConfig,
       );
       expect(mockFetch).toHaveBeenCalled();
       expect(response.requestId).toBe('requestId');
@@ -177,12 +203,11 @@ describe('GraphQL client', () => {
         },
       };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
       const response = await createLegacyTransaction(
         config,
+        mockCredentials,
         transaction,
         false,
-        updateConfig,
       );
       expect(mockFetch).toHaveBeenCalled();
       expect(response.requestId).toBe('requestId');
@@ -199,13 +224,12 @@ describe('GraphQL client', () => {
         },
       };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
       const response = await createPersonalSign(
         config,
+        mockCredentials,
         'address',
         'message',
         'publicKey',
-        updateConfig,
       );
       expect(mockFetch).toHaveBeenCalled();
       expect(response.requestId).toBe('requestId');
@@ -222,14 +246,13 @@ describe('GraphQL client', () => {
         },
       };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
       const response = await createSignTypedData(
         config,
+        mockCredentials,
         'address',
         'message',
         'V4',
         'publicKey',
-        updateConfig,
       );
       expect(mockFetch).toHaveBeenCalled();
       expect(response.requestId).toBe('requestId');
@@ -254,11 +277,10 @@ describe('GraphQL client', () => {
         },
       };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
       const response = await fetchTransactionInfo(
         config,
+        mockCredentials,
         'requestId',
-        updateConfig,
       );
       expect(mockFetch).toHaveBeenCalled();
       expect(response.signedTransaction.transactionDigest).toBe('0x12345');
@@ -278,8 +300,7 @@ describe('GraphQL client', () => {
         },
       };
       mockFetchImpl(mockFetch, responseData);
-      const updateConfig = jest.fn() as UpdateConfig;
-      const response = await getRequest(config, 'requestId', updateConfig);
+      const response = await getRequest(config, mockCredentials, 'requestId');
       expect(mockFetch).toHaveBeenCalled();
       expect(response.signatures.raw).toBe('0x12345');
     });

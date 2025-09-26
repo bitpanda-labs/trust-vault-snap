@@ -24,7 +24,10 @@ const config: SnapConfig = {
     punycode: true,
   },
   environment: {
-    allowedOrigins: ['https://app.bitpandacustody.com'],
+    allowedOrigins: [
+      'https://app.bitpandacustody.com',
+      'https://bts-custody.bitpanda.com',
+    ],
     version: process.env.npm_package_version,
   },
 };

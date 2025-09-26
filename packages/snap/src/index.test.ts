@@ -4,19 +4,6 @@ import { installSnap } from '@metamask/snaps-jest';
 import { SnapMode } from './types';
 
 describe('onRpcRequest', () => {
-  describe('hello', () => {
-    it('returns hello with correct origin', async () => {
-      const { request } = await installSnap();
-
-      const origin = 'Jest';
-      const response = await request({
-        method: 'hello',
-        origin,
-      });
-      expect(response.response).toMatchObject({ result: `hello ${origin}` });
-    });
-  });
-
   it('gets the snap mode', async () => {
     const { request } = await installSnap();
 

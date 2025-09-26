@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, jest } from '@jest/globals';
-import type { KeyringAccount, KeyringRequest } from '@metamask/keyring-api';
-import { EthAccountType, EthMethod, EthScope } from '@metamask/keyring-api';
+import { EthMethod } from '@metamask/keyring-api';
 import { randomBytes } from 'crypto';
-import { v4 as uuid, validate as validateUUID } from 'uuid';
+import { validate as validateUUID } from 'uuid';
 
 import { TrustVaultKeyring } from './keyring';
+import {
+  createAccount,
+  createRequest,
+  createState,
+  createTrustVaultRequest,
+  mockAccounts,
+  mockRequest,
+  mockValues,
+} from './testHelpers';
 import type {
   KeyringState,
   TrustApiConfiguration,
@@ -55,25 +63,32 @@ jest.mock('./graphql/client', () => {
   return {
     createEip1559Transaction: (...args: any) => {
       mockCreateEip1559Transaction.mockImplementation(async () => {
-        return { requestId: 'requestId' };
+        return mockRequest;
       });
       return mockCreateEip1559Transaction(...args);
     },
     createLegacyTransaction: (...args: any) => {
       mockCreateLegacyTransaction.mockImplementation(async () => {
-        return { requestId: 'requestId' };
+        return mockRequest;
       });
       return mockCreateLegacyTransaction(...args);
     },
     createPersonalSign: (...args: any) => {
       mockCreatePersonalSign.mockImplementation(async () => {
-        return { requestId: 'requestId' };
+        return mockRequest;
       });
       return mockCreatePersonalSign(...args);
     },
     fetchTransactionInfo: (...args: any) => mockFetchTransactionInfo(...args),
     getRequest: (...args: any) => mockGetRequest(...args),
   };
+});
+
+const makeTx = () => ({
+  type: '0x0',
+  gasLimit: '0x01',
+  gasPrice: '0x02',
+  from: mockValues.address1,
 });
 
 describe('TrustVaultKeyring', () => {
@@ -85,26 +100,39 @@ describe('TrustVaultKeyring', () => {
     });
 
     it('returns accounts array when there are multiple accounts', async () => {
-      const account1 = createAccount('name1', 'address1');
-      const account2 = createAccount('name2', 'address2');
+      const account1 = createAccount(
+        'name1',
+        mockValues.address1,
+        mockValues.account1id,
+      );
+      const account2 = createAccount(
+        'name2',
+        mockValues.address2,
+        mockValues.account2id,
+      );
       const accounts = { name1: account1, name2: account2 };
       const keyring = new TrustVaultKeyring(createState(accounts, {}));
       const retrievedAccounts = await keyring.listAccounts();
       const addresses = retrievedAccounts.map((account) => account.address);
-      expect(addresses.sort()).toStrictEqual(['address1', 'address2']);
+      expect(addresses.sort()).toStrictEqual([
+        mockValues.address2,
+        mockValues.address1,
+      ]);
     });
   });
 
   describe('getAccount', () => {
     it('returns account if existent', async () => {
-      const accounts = { name: createAccount('name', 'address') };
+      const accounts = {
+        name: createAccount('name', mockValues.address1, mockValues.account1id),
+      };
       const keyring = new TrustVaultKeyring(createState(accounts, {}));
       const account = await keyring.getAccount('name');
-      expect(account.address).toBe('address');
+      expect(account.address).toBe(mockValues.address1);
     });
 
     it('throws an error if the account does not exist', async () => {
-      const keyring = new TrustVaultKeyring(createState({}, {}));
+      const keyring = new TrustVaultKeyring(createState(mockAccounts, {}));
       await expect(
         async () => await keyring.getAccount('unknown'),
       ).rejects.toThrow('Account unknown does not exist');
@@ -124,7 +152,7 @@ describe('TrustVaultKeyring', () => {
     ])(
       'throws an error if the input is not valid',
       async (options, message) => {
-        const keyring = new TrustVaultKeyring(createState({}, {}));
+        const keyring = new TrustVaultKeyring(createState(mockAccounts, {}));
         await expect(
           async () => await keyring.createAccount(options),
         ).rejects.toThrow(message);
@@ -132,8 +160,10 @@ describe('TrustVaultKeyring', () => {
     );
 
     it('throws an error if the address is already in use', async () => {
-      const address = '0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5';
-      const accounts = { name: createAccount('name', address) };
+      const address = mockValues.address1;
+      const accounts = {
+        name: createAccount('name', address, mockValues.account1id),
+      };
       const keyring = new TrustVaultKeyring(createState(accounts, {}));
       const options = { name: 'name', address };
       await expect(
@@ -143,8 +173,12 @@ describe('TrustVaultKeyring', () => {
 
     it('creates an account', async () => {
       const keyring = new TrustVaultKeyring(createState({}, {}));
-      const address = '0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5';
-      const account = await keyring.createAccount({ name: 'name', address });
+      const address = mockValues.address3;
+      const account = await keyring.createAccount({
+        name: 'name',
+        address,
+        trustId: mockValues.trustId,
+      });
       expect(validateUUID(account.id)).toBe(true);
       expect(account.address).toBe(address);
       expect(await keyring.listAccounts()).toHaveLength(1);
@@ -153,14 +187,14 @@ describe('TrustVaultKeyring', () => {
 
   describe('deleteAccount', () => {
     it('deletes account if existent', async () => {
-      const accounts = { name: createAccount('name', 'address') };
+      const accounts = { name: createAccount('name', mockValues.address1) };
       const keyring = new TrustVaultKeyring(createState(accounts, {}));
       await keyring.deleteAccount('name');
       expect(await keyring.listAccounts()).toHaveLength(0);
     });
 
     it('throws an error if the account does not exist', async () => {
-      const keyring = new TrustVaultKeyring(createState({}, {}));
+      const keyring = new TrustVaultKeyring(createState(mockAccounts, {}));
       await expect(
         async () => await keyring.deleteAccount('unknown'),
       ).rejects.toThrow('Account unknown does not exist');
@@ -169,18 +203,24 @@ describe('TrustVaultKeyring', () => {
 
   describe('listRequests', () => {
     it('returns empty array when there are no requests', async () => {
-      const keyring = new TrustVaultKeyring(createState({}, {}));
+      const keyring = new TrustVaultKeyring(createState(mockAccounts, {}));
       const retrievedAccounts = await keyring.listRequests();
       expect(retrievedAccounts).toStrictEqual([]);
     });
 
     it('returns requests array when there are multiple requests', async () => {
-      const request1 = createTrustVaultRequest(EthMethod.SignTransaction);
-      const request2 = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request1 = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
+      const request2 = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       const requests: Record<string, TrustVaultRequest> = {};
       requests[request1.id] = request1;
       requests[request2.id] = request2;
-      const keyring = new TrustVaultKeyring(createState({}, requests));
+      const keyring = new TrustVaultKeyring(
+        createState(mockAccounts, requests),
+      );
       const keyringRequests = await keyring.listRequests();
       expect(keyringRequests).toHaveLength(2);
     });
@@ -188,16 +228,20 @@ describe('TrustVaultKeyring', () => {
 
   describe('getRequest', () => {
     it('returns request if existent', async () => {
-      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       const requests: Record<string, TrustVaultRequest> = {};
       requests[request.id] = request;
-      const keyring = new TrustVaultKeyring(createState({}, requests));
+      const keyring = new TrustVaultKeyring(
+        createState(mockAccounts, requests),
+      );
       const keyringRequest = await keyring.getRequest(request.id);
       expect(keyringRequest).toBe(request);
     });
 
     it('throws an error if the request does not exist', async () => {
-      const keyring = new TrustVaultKeyring(createState({}, {}));
+      const keyring = new TrustVaultKeyring(createState(mockAccounts, {}));
       await expect(
         async () => await keyring.getRequest('unknown'),
       ).rejects.toThrow('Request unknown does not exist');
@@ -215,10 +259,11 @@ describe('TrustVaultKeyring', () => {
         accounts: {},
         requests: {},
         rpcUrls: {},
+        trustIdToToken: {},
         mode: SnapMode.Basic,
       };
       const keyring = new TrustVaultKeyring(state);
-      const request = createRequest(EthMethod.SignTransaction);
+      const request = createRequest(EthMethod.SignTransaction, [makeTx()]);
       await expect(
         async () => await keyring.submitRequest(request),
       ).rejects.toThrow(
@@ -227,9 +272,9 @@ describe('TrustVaultKeyring', () => {
     });
 
     it('throws an error if the evm method is not supported', async () => {
-      const state = createState({}, {});
+      const state = createState(mockAccounts, {});
       const keyring = new TrustVaultKeyring(state);
-      const request = createRequest(EthMethod.SignTypedDataV1);
+      const request = createRequest(EthMethod.SignTypedDataV1, [makeTx()]);
       await expect(
         async () => await keyring.submitRequest(request),
       ).rejects.toThrow(
@@ -238,10 +283,30 @@ describe('TrustVaultKeyring', () => {
     });
 
     it('creates an eip1559 transaction request', async () => {
-      const state = createState({}, {});
+      const state = createState(
+        {
+          account1: {
+            type: 'eip155:eoa',
+            address: mockValues.address1,
+            options: {
+              trustId: mockValues.trustId,
+              address: mockValues.address1,
+            },
+            id: '',
+            methods: [''],
+            scopes: ['{}:{}'],
+          },
+        },
+        {},
+      );
       const keyring = new TrustVaultKeyring(state);
       const params = [
-        { type: '0x02', maxFeePerGas: '0x01', maxPriorityFeePerGas: '0x02' },
+        {
+          type: '0x02',
+          maxFeePerGas: '0x01',
+          maxPriorityFeePerGas: '0x02',
+          from: mockValues.address1,
+        },
       ];
       const request = createRequest(EthMethod.SignTransaction, params);
       const response = await keyring.submitRequest(request);
@@ -253,9 +318,31 @@ describe('TrustVaultKeyring', () => {
     });
 
     it('creates a legacy transaction request', async () => {
-      const state = createState({}, {});
+      const state = createState(
+        {
+          account1: {
+            type: 'eip155:erc4337',
+            address: mockValues.address1,
+            options: {
+              trustId: mockValues.trustId,
+              address: mockValues.address1,
+            },
+            id: '',
+            methods: [''],
+            scopes: ['{}:{}'],
+          },
+        },
+        {},
+      );
       const keyring = new TrustVaultKeyring(state);
-      const params = [{ type: '0x0', gasLimit: '0x01', gasPrice: '0x02' }];
+      const params = [
+        {
+          type: '0x0',
+          gasLimit: '0x01',
+          gasPrice: '0x02',
+          from: mockValues.address1,
+        },
+      ];
       const request = createRequest(EthMethod.SignTransaction, params);
       const response = await keyring.submitRequest(request);
       expect(response).toMatchObject({ pending: true });
@@ -267,9 +354,16 @@ describe('TrustVaultKeyring', () => {
 
     it('throws an error if enhanced mode is used without proxy', async () => {
       mockIsUsingRpcProxy.mockImplementation(async () => false);
-      const state = createState({}, {}, SnapMode.Enhanced);
+      const state = createState(mockAccounts, {}, SnapMode.Enhanced);
       const keyring = new TrustVaultKeyring(state);
-      const params = [{ type: '0x0', gasLimit: '0x01', gasPrice: '0x02' }];
+      const params = [
+        {
+          type: '0x0',
+          gasLimit: '0x01',
+          gasPrice: '0x02',
+          from: mockValues.address1,
+        },
+      ];
       const request = createRequest(EthMethod.SignTransaction, params);
       await expect(
         async () => await keyring.submitRequest(request),
@@ -281,10 +375,16 @@ describe('TrustVaultKeyring', () => {
 
     it('throws an error if enhanced mode is and rpc url is not found', async () => {
       mockIsUsingRpcProxy.mockImplementation(async () => true);
-      const state = createState({}, {}, SnapMode.Enhanced);
+      const state = createState(mockAccounts, {}, SnapMode.Enhanced);
       const keyring = new TrustVaultKeyring(state);
       const params = [
-        { chainId: 'unknown', type: '0x0', gasLimit: '0x01', gasPrice: '0x02' },
+        {
+          chainId: 'unknown',
+          type: '0x0',
+          gasLimit: '0x01',
+          gasPrice: '0x02',
+          from: mockValues.address1,
+        },
       ];
       const request = createRequest(EthMethod.SignTransaction, params);
       await expect(
@@ -295,25 +395,71 @@ describe('TrustVaultKeyring', () => {
 
     it('uses the rpc url and submits tx if enhanced mode', async () => {
       mockIsUsingRpcProxy.mockImplementation(async () => true);
-      const state = createState({}, {}, SnapMode.Enhanced);
+      const state = createState(
+        {
+          account1: {
+            type: 'eip155:erc4337',
+            address: mockValues.address1,
+            options: {
+              trustId: mockValues.trustId,
+              address: mockValues.address1,
+            },
+            id: '',
+            methods: [''],
+            scopes: ['{}:{}'],
+          },
+        },
+        {},
+        SnapMode.Enhanced,
+      );
       const keyring = new TrustVaultKeyring(state);
       await keyring.addRpcUrl({ chainId: 'chain', rpcUrl: 'http://rpc' });
       const params = [
-        { chainId: 'chain', type: '0x0', gasLimit: '0x01', gasPrice: '0x02' },
+        {
+          chainId: 'chain',
+          type: '0x0',
+          gasLimit: '0x01',
+          gasPrice: '0x02',
+          from: mockValues.address1,
+        },
       ];
       const request = createRequest(EthMethod.SignTransaction, params);
       const response = await keyring.submitRequest(request);
       expect(response).toMatchObject({ pending: true });
-      expect(mockCreateLegacyTransaction.mock?.calls?.[0]?.[2]).toBe(true);
+      expect(mockCreateLegacyTransaction.mock?.calls?.[0]?.[3]).toBe(true);
       expect(mockCreateLegacyTransaction.mock?.calls?.[0]?.[4]).toBe(
         'http://rpc',
       );
     });
 
     it('creates a personal sign request', async () => {
-      const state = createState({}, {});
+      const state = createState(
+        {
+          account1: {
+            type: 'eip155:erc4337',
+            address: mockValues.address1,
+            options: {
+              trustId: mockValues.trustId,
+              address: mockValues.address1,
+            },
+            id: '',
+            methods: [''],
+            scopes: ['{}:{}'],
+          },
+        },
+        {},
+      );
       const keyring = new TrustVaultKeyring(state);
-      const params = ['message', '0x0c54FcCd2e384b4BB6f2E405Bf5Cbc15a017AaFb'];
+      const params = [
+        {
+          chainId: 'chain',
+          type: '0x0',
+          gasLimit: '0x01',
+          gasPrice: '0x02',
+          from: mockValues.address1,
+        },
+        mockValues.address1,
+      ];
       const request = createRequest(EthMethod.PersonalSign, params);
       const response = await keyring.submitRequest(request);
       expect(response).toMatchObject({ pending: true });
@@ -324,9 +470,16 @@ describe('TrustVaultKeyring', () => {
     });
 
     it('throws an error for an unsupported transaction type', async () => {
-      const state = createState({}, {});
+      const state = createState(mockAccounts, {});
       const keyring = new TrustVaultKeyring(state);
-      const params = [{ type: '0x01' }];
+      const params = [
+        {
+          type: '0x01',
+          gasLimit: '0x01',
+          gasPrice: '0x02',
+          from: mockValues.address1,
+        },
+      ];
       const request = createRequest(EthMethod.SignTransaction, params);
       await expect(
         async () => await keyring.submitRequest(request),
@@ -370,10 +523,12 @@ describe('TrustVaultKeyring', () => {
 
     it('will not check already signed requests', async () => {
       const requests: Record<string, TrustVaultRequest> = {};
-      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       request.status = RequestStatus.Signed;
       requests[request.id] = request;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(0);
@@ -382,13 +537,14 @@ describe('TrustVaultKeyring', () => {
     it('will not check requests if enhanced mode is on by not using proxy', async () => {
       mockIsUsingRpcProxy.mockImplementation(async () => false);
       const requests: Record<string, TrustVaultRequest> = {};
-      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       requests[request.id] = request;
-      const state = createState({}, requests, SnapMode.Enhanced);
+      const state = createState(mockAccounts, requests, SnapMode.Enhanced);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(0);
-      expect(mockDisplayProxyDialog).toHaveBeenCalled();
     });
 
     it('will check multiple pending requests', async () => {
@@ -396,11 +552,15 @@ describe('TrustVaultKeyring', () => {
         async () => pendingTransactionInfoResponse,
       );
       const requests: Record<string, TrustVaultRequest> = {};
-      const request1 = createTrustVaultRequest(EthMethod.SignTransaction);
-      const request2 = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request1 = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
+      const request2 = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       requests[request1.id] = request1;
       requests[request2.id] = request2;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(2);
@@ -417,9 +577,11 @@ describe('TrustVaultKeyring', () => {
         async () => signedTransactionInfoResponse,
       );
       const requests: Record<string, TrustVaultRequest> = {};
-      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       requests[request.id] = request;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(1);
@@ -433,9 +595,11 @@ describe('TrustVaultKeyring', () => {
         async () => cancelledTransactionInfoResponse,
       );
       const requests: Record<string, TrustVaultRequest> = {};
-      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       requests[request.id] = request;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockFetchTransactionInfo).toHaveBeenCalledTimes(1);
@@ -447,10 +611,10 @@ describe('TrustVaultKeyring', () => {
     it('will check and approve a signed personal sign request', async () => {
       mockGetRequest.mockImplementation(async () => signedGetRequestResponse);
       const requests: Record<string, TrustVaultRequest> = {};
-      const params = ['message', 'address'];
+      const params = ['message', 'address', makeTx()];
       const request = createTrustVaultRequest(EthMethod.PersonalSign, params);
       requests[request.id] = request;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockGetRequest).toHaveBeenCalledTimes(1);
@@ -462,13 +626,13 @@ describe('TrustVaultKeyring', () => {
     it('will check and approve a signed signTypedData request', async () => {
       mockGetRequest.mockImplementation(async () => signedGetRequestResponse);
       const requests: Record<string, TrustVaultRequest> = {};
-      const params = ['address', { key: 'value' }];
+      const params = [makeTx(), 'address', { key: 'value' }];
       const request = createTrustVaultRequest(
         EthMethod.SignTypedDataV4,
         params,
       );
       requests[request.id] = request;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect(mockGetRequest).toHaveBeenCalledTimes(1);
@@ -482,9 +646,11 @@ describe('TrustVaultKeyring', () => {
         throw new Error('network error');
       });
       const requests: Record<string, TrustVaultRequest> = {};
-      const request = createTrustVaultRequest(EthMethod.SignTransaction);
+      const request = createTrustVaultRequest(EthMethod.SignTransaction, [
+        makeTx(),
+      ]);
       requests[request.id] = request;
-      const state = createState({}, requests);
+      const state = createState(mockAccounts, requests);
       const keyring = new TrustVaultKeyring(state);
       await keyring.checkPendingRequests();
       expect((await keyring.getRequest(request.id)).status).toBe(
@@ -499,105 +665,13 @@ describe('TrustVaultKeyring', () => {
         accounts: {},
         requests: {},
         rpcUrls: {},
+        trustIdToToken: {},
         mode: SnapMode.Basic,
       };
       const keyring = new TrustVaultKeyring(state);
-      const config = createState({}, {}).trustApiConfiguration;
+      const config = createState(mockAccounts, {}).trustApiConfiguration;
       await keyring.addTrustApiConfiguration(config as TrustApiConfiguration);
       expect(state.trustApiConfiguration).toBe(config);
     });
   });
 });
-
-/**
- * Creates a mock KeyringAccount.
- *
- * @param name - The account name.
- * @param address - The account address.
- * @returns The mock account.
- */
-function createAccount(name: string, address: string): KeyringAccount {
-  return {
-    id: uuid(),
-    options: { name, address },
-    scopes: [EthScope.Eoa],
-    address,
-    methods: [
-      EthMethod.PersonalSign,
-      EthMethod.Sign,
-      EthMethod.SignTransaction,
-      EthMethod.SignTypedDataV1,
-      EthMethod.SignTypedDataV3,
-      EthMethod.SignTypedDataV4,
-    ],
-    type: EthAccountType.Eoa,
-  };
-}
-
-/**
- * Creates a mock TrustVaultKeyringRequest.
- *
- * @param method - The EVM method.
- * @param params - The EVM params.
- * @returns The mock request.
- */
-function createTrustVaultRequest(
-  method: EthMethod,
-  params?: any,
-): TrustVaultRequest {
-  return {
-    ...createRequest(method, params),
-    trustVaultRequestId: 'requestId',
-    status: RequestStatus.Pending,
-  };
-}
-
-/**
- * Creates a mock KeyringRequest.
- *
- * @param method - The EVM method.
- * @param params - The EVM params.
- * @returns The mock request.
- */
-function createRequest(method: EthMethod, params?: any): KeyringRequest {
-  return {
-    id: uuid(),
-    scope: 'scope',
-    account: 'account',
-    request: {
-      method,
-      params: params || [],
-    },
-  };
-}
-
-/**
- * Creates a mock KeyringState.
- *
- * @param accounts - The mock accounts.
- * @param requests - The mock requests.
- * @param mode - The mock snap mode.
- * @returns The mock KeyringState.
- */
-function createState(
-  accounts: Record<string, KeyringAccount>,
-  requests: Record<string, TrustVaultRequest>,
-  mode: SnapMode = SnapMode.Basic,
-): KeyringState {
-  return {
-    accounts,
-    requests,
-    trustApiConfiguration: {
-      url: 'url',
-      apiKey: 'apiKey',
-      trustId: 'trustId',
-      token: {
-        enc: 'enc',
-        iv: 'iv',
-        tag: 'tag',
-      },
-    },
-    rpcUrls: {},
-    mode,
-  };
-}

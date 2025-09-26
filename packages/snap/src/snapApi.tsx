@@ -13,6 +13,7 @@ const defaultState: KeyringState = {
   accounts: {},
   requests: {},
   rpcUrls: {},
+  trustIdToToken: {},
   mode: SnapMode.Basic,
 };
 
